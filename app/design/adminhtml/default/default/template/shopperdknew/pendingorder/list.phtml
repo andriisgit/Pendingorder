@@ -1,0 +1,76 @@
+<?php
+$resource = Mage::getSingleton('core/resource');
+$readConnection = $resource->getConnection('core_read');
+
+$OrdersTableName = $resource->getTableName('sales_flat_order');
+$ItemsTableName = $resource->getTableName('sales_flat_order_item');
+$AddressTableName = $resource->getTableName('sales_flat_order_address');
+
+$query = 'SELECT O.entity_id, O.increment_id, I.name, I.qty_ordered, I.product_id, O.base_currency_code, O.base_subtotal, O.shipping_description
+	, A.firstname , A.lastname
+	, A.street
+	, A.city , A.postcode
+	, A.country_id
+	, A.telephone
+	, A.email
+FROM ' . $ItemsTableName . ' I
+INNER JOIN ' . $OrdersTableName . ' O ON O.entity_id=I.order_id
+LEFT JOIN ' . $AddressTableName . ' A ON O.entity_id=A.parent_id
+WHERE O.status=\'pending\' AND I.product_type=\'simple\' ORDER BY I.name ASC';
+$results = $readConnection->fetchAll($query);
+$res_row = '';
+foreach ($results as $result) {
+    $order = Mage::getModel('sales/order')->load($result['entity_id']);
+    $order->getAllVisibleItems();
+    $product = Mage::getModel('catalog/product')->load($result['product_id']);
+    $attributes = $product->getAttributes();
+    $unit = '';
+    foreach ($attributes as $attribute) {
+        if ($attribute->getAttributeCode() == 'unit') {
+            //$label = $attribute->getFrontend()->getLabel($product);
+            $unit = $attribute->getFrontend()->getValue($product);
+            break;
+        }
+    }
+
+    $res_row .= '<tr><td>' . $result['entity_id'] . '</td>
+        <td><a href="' . Mage::helper('adminhtml')->getUrl('adminhtml/sales_order/view/order_id/', ['order_id' => $result['entity_id']]) . '">' . $result['increment_id'] . '</a></td>
+        <td>' . $result['name'] . '</td>
+        <td class="a-center">' . $unit . number_format($result['qty_ordered'], 0) . '</td>
+        <td class="a-right">' . $result['base_currency_code'] . number_format($result['base_subtotal'], 2, ',', '')
+            . '<br/>' . $order->getPayment()->getMethodInstance()->getTitle() . '</td>
+        <td class="a-left">' . $result['shipping_description'] . '</td><td class="last">' .
+			$result['increment_id'] . '<br/>' .
+			$result['firstname'] . ' ' . $result['lastname'] . '<br/>' .
+			$result['street'] . '<br/>' .
+			$result['city'] . ', ' . $result['postcode'] . '<br/>' .
+			Mage::app()->getLocale()->getTranslation($result['country_id'], 'Territory', null, 2) . '<br/>' .
+			'Telephone: ' . $result['telephone'] . '<br/>' .
+			'Email: <a href="mailto:' . $result['email'] . '">' . $result['email'] . '</a><br/>' .
+			number_format($result['qty_ordered'], 0) . 'x ' . $result['name']
+		. '</td></tr>';
+}
+?>
+<div class="grid np">
+    <div class="hor-scroll">
+        <table cellspacing="0" class="data order-tables">
+            <thead>
+                <tr class="headings">
+                    <th><?php echo $this->helper('pendingorder')->__('ID') ?></th>
+                    <th><?php echo $this->helper('pendingorder')->__('Order') ?></th>
+                    <th><?php echo $this->helper('pendingorder')->__('Product') ?></th>
+                    <th><?php echo $this->helper('pendingorder')->__('Qty') ?></th>
+                    <th><?php echo $this->helper('pendingorder')->__('Base price Sum') ?></th>
+                    <th><?php echo $this->helper('pendingorder')->__('Shipping description') ?></th>
+                    <th><?php echo $this->helper('pendingorder')->__('Dropshipping') ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php
+                echo $res_row;
+                unset ($resource, $readConnection, $query, $results, $res_row);
+                ?>
+            </tbody>
+        </table>
+    </div>
+</div>

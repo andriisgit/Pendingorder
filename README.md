@@ -5,6 +5,7 @@ Pending order list in admin Magento 1.x
 - Creates "Pendingorder" menu item under admin area
 
 ### Screenshot
+![](https://github.com/andriisgit/Pendingorder/blob/master/screenshot.jpg)
 
 ### Requirements
 - Magento 1.x
