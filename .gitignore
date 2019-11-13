@@ -1,3 +1,10 @@
+.idea/
+.VSCode/
+.history/
+.git/
+.DS_Store
+*.bak
+
 #--------------------------#
 # Magento Default Files    #
 #--------------------------#
