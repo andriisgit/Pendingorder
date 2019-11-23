@@ -1,30 +1,55 @@
 <?php
+/*
+$resource = Mage::getSingleton('core/resource');
+$readConnection = $resource->getConnection('core_read');
+
+$OrdersTableName = $resource->getTableName('sales_flat_order');
+$ItemsTableName = $resource->getTableName('sales_flat_order_item');
+
+$query = 'SELECT O.entity_id, O.updated_at, O.increment_id, I.name, I.qty_ordered, O.base_currency_code, O.base_subtotal, O.shipping_description
+FROM ' . $ItemsTableName . ' I
+INNER JOIN ' . $OrdersTableName . ' O ON O.entity_id=I.order_id
+WHERE O.status=\'pending\' AND I.product_type=\'simple\' ORDER BY O.updated_at ASC';
+$results = $readConnection->fetchAll($query);
+$res_row = '';
+
+foreach ($results as $result) {
+    $order = Mage::getModel('sales/order')->load($result['entity_id']);
+
+    $res_row .= '<tr>
+        <td>' . $result['entity_id'] . '</td>
+        <td>' . date('j M Y', strtotime($result['updated_at'])) . '</td>
+        <td><a href="' . Mage::helper('adminhtml')->getUrl('adminhtml/sales_order/view/order_id/', ['order_id' => $result['entity_id']]) . '">' . $result['increment_id'] . '</a></td>
+        <td>' . $result['name'] . '</td>
+        <td class="a-center">' . number_format($result['qty_ordered'], 0) . '</td>
+        <td class="a-right">' . $result['base_currency_code'] . number_format($result['base_subtotal'], 2, ',', '') . '</td>
+        <td class="a-right">' . $result['shipping_description'] . '</td>
+        <td class="last">' .
+        $result['increment_id'] . '<br/>' .
+        $order->getShippingAddress()->getFormated(true) . '<br/>' .
+        'Email: <a href="mailto:' . $order->getCustomerEmail() . '">' . $order->getCustomerEmail() . '</a><br/>' .
+        '</td>
+    </tr>';
+}
+*/
+
 $order_collection = Mage::getResourceModel('sales/order_collection')
     ->addFieldToSelect('*')
     //->addFieldToFilter('customer_id',$customer_id)
     ->addFieldToFilter('status', array('in' => array('pending')))
     ->setOrder('created_at', 'desc');
-$tbody = '';
 
+$res_row = '';
 foreach($order_collection as $orders) {
-    $order_id = $orders['entity_id'];
 
-    //Get all items for the order id
-    $order = Mage::getModel('sales/order')->load($order_id);
-    $order->getAllVisibleItems();
-	
-    $items = $order->getItemsCollection()
-        ->addAttributeToSelect('*')
-        ->addAttributeToFilter('product_type', array('eq'=>'simple'))
-        ->load();
-    
-	$payment = $order->getPayment();
-	$shippingAddress = $order->getShippingAddress();
+    $order = Mage::getModel('sales/order')->load($orders['entity_id']);
+    $items = $order->getAllItems();
+    $payment = $order->getPayment();
+
+    $ordered_items_units = $ordered_items = $pcs = '';
 
     foreach($items as $item) {
-        if ($item->getProductType() == "simple") {
-
-            $pitem = ( $item->getParentItem() ? $item->getParentItem() : $item );
+        if ($item->getProductType() == 'simple') {
 
             $product = Mage::getModel('catalog/product')->load($item->getProductId());
             $attributes = $product->getAttributes();
@@ -36,26 +61,29 @@ foreach($order_collection as $orders) {
                     break;
                 }
             }
-
-            $tbody .= '<tr><td>' . $order_id . '</td>
-            <td>' . $orders->getCreatedAtDate() . '</td>
-            <td><a href="' . Mage::helper('adminhtml')->getUrl('adminhtml/sales_order/view/order_id/', ['order_id' => $order_id]) . '">' . $orders->getRealOrderId() . '</a></td>
-            <td>' . $item->getName() . '</td>
-            <td class="a-center">' . $unit . number_format($item->getQtyOrdered(), 0) . '</td>
-            <td class="a-right">' . $order->getOrderCurrencyCode() . number_format($pitem->getPrice(), 2, ',', '')
-               . '<br />' . $payment->getMethodInstance()->getTitle() . '</td>
-            <td class="a-left">' . $order['shipping_description'] . '</td><td class="last">' .
-				$orders->getRealOrderId() . '<br/>' .
-				$shippingAddress->getFirstname() . ' ' . $shippingAddress->getLastname() . '<br/>' .
-				$shippingAddress->getStreet()[0] . '<br/>' .
-				$shippingAddress->getCity() . ', ' . $shippingAddress->getPostcode() . '<br/>' .
-				Mage::app()->getLocale()->getTranslation($shippingAddress->getCountry_id(), 'Territory', null, 2) . '<br/>' .
-				'Telephone: ' . $shippingAddress->getTelephone() . '<br/>' .
-				'Email: <a href="mailto:' . $shippingAddress->getEmail() . '">' . $shippingAddress->getEmail() . '</a><br/>' .
-				number_format($item->getQtyOrdered(), 0) . 'x ' . $item->getName() .
-			'</td></tr>';
+            
+            $pcs .= $unit . number_format($item->getQtyOrdered(), 0) . '<br/>';
+            $ordered_items_units .= number_format($item->getQtyOrdered(), 0) . 'x ' . $item->getName() . '<br/>';
+            $ordered_items .= $item->getName() . '<br/>';
+        
         }
     }
+
+    $res_row .= '<tr>
+        <td>' . $orders['entity_id'] . '</td>
+        <td>' . $orders->getCreatedAtDate() . '</td>
+        <td><a href="' . Mage::helper('adminhtml')->getUrl('adminhtml/sales_order/view/order_id/', ['order_id' => $orders['entity_id']]) . '">' . $orders->getRealOrderId() . '</a></td>
+        <td>' . $ordered_items . '</td>
+        <td class="a-center">' . $pcs . '</td>
+        <td class="a-right">' . $order->getOrderCurrencyCode() . number_format($order->getBaseSubtotal(), 2, ',', '') . '<br />' . $payment->getMethodInstance()->getTitle() .'</td>
+        <td class="a-right">' . $order->getShippingDescription() . '</td>
+        <td class="last">' .
+            $orders->getRealOrderId() . '<br/>' .
+            $order->getShippingAddress()->getFormated(true) . '<br/>' .
+            'Email: <a href="mailto:' . $order->getCustomerEmail() . '">' . $order->getCustomerEmail() . '</a><br/>' .
+            $ordered_items_units .
+        '</td>
+    </tr>';
 }
 ?>
 <div class="grid np">
@@ -68,16 +96,16 @@ foreach($order_collection as $orders) {
                 <th><?php echo $this->helper('pendingorder')->__('Order') ?></th>
                 <th><?php echo $this->helper('pendingorder')->__('Product') ?></th>
                 <th><?php echo $this->helper('pendingorder')->__('Qty') ?></th>
-                <th><?php echo $this->helper('pendingorder')->__('Base price (w/o tax)') ?></th>
-                <th><?php echo Mage::helper('sales')->__('Shipping &amp; Handling') ?></th>
-				<th><?php echo $this->helper('pendingorder')->__('Dropshipping') ?></th>
+                <th><?php echo $this->helper('pendingorder')->__('Base price Sum') ?></th>
+                <th><?php echo $this->helper('pendingorder')->__('Shipping description') ?></th>
+                <th><?php echo $this->helper('pendingorder')->__('Dropshipping') ?></th>
             </tr>
             </thead>
             <tbody>
-                <?php
-                echo $tbody;
-
-                ?>
+            <?php
+            echo $res_row;
+            unset ($order_collection, $res_row);
+            ?>
             </tbody>
         </table>
     </div>

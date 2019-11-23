@@ -4,8 +4,9 @@ $readConnection = $resource->getConnection('core_read');
 
 $OrdersTableName = $resource->getTableName('sales_flat_order');
 $ItemsTableName = $resource->getTableName('sales_flat_order_item');
-$AddressTableName = $resource->getTableName('sales_flat_order_address');
 
+/*
+$AddressTableName = $resource->getTableName('sales_flat_order_address');
 $query = 'SELECT O.entity_id, O.increment_id, I.name, I.qty_ordered, I.product_id, O.base_currency_code, O.base_subtotal, O.shipping_description
 	, A.firstname , A.lastname
 	, A.street
@@ -16,39 +17,68 @@ $query = 'SELECT O.entity_id, O.increment_id, I.name, I.qty_ordered, I.product_i
 FROM ' . $ItemsTableName . ' I
 INNER JOIN ' . $OrdersTableName . ' O ON O.entity_id=I.order_id
 LEFT JOIN ' . $AddressTableName . ' A ON O.entity_id=A.parent_id
-WHERE O.status=\'pending\' AND I.product_type=\'simple\' ORDER BY I.name ASC';
+WHERE O.status=\'pending\' AND I.product_type=\'simple\' GROUP BY O.increment_id ORDER BY I.name ASC';
+*/
+$query = 'SELECT O.entity_id, O.increment_id, I.name, I.qty_ordered, I.product_id, O.base_currency_code, O.base_subtotal, O.shipping_description
+FROM ' . $ItemsTableName . ' I
+INNER JOIN ' . $OrdersTableName . ' O ON O.entity_id=I.order_id
+WHERE O.status=\'pending\' AND I.product_type=\'simple\' GROUP BY O.increment_id ORDER BY I.name ASC';
+
 $results = $readConnection->fetchAll($query);
 $res_row = '';
+$ttt = [];
 foreach ($results as $result) {
     $order = Mage::getModel('sales/order')->load($result['entity_id']);
-    $order->getAllVisibleItems();
+    $items = $order->getAllItems();
+    /*$order->getAllVisibleItems();
     $product = Mage::getModel('catalog/product')->load($result['product_id']);
     $attributes = $product->getAttributes();
     $unit = '';
     foreach ($attributes as $attribute) {
         if ($attribute->getAttributeCode() == 'unit') {
-            //$label = $attribute->getFrontend()->getLabel($product);
+            // $label = $attribute->getFrontend()->getLabel($product);
             $unit = $attribute->getFrontend()->getValue($product);
             break;
         }
+    } */
+
+    $ordered_items = $ordered_items_units = $pu = '';
+
+    foreach($items as $i) {
+
+        if ($i->getProductType() == 'simple') {
+            $ordered_items_units .= number_format($i->getQtyOrdered(), 0) . 'x ' . $i->getName() . '<br/>';
+            $ordered_items .= $i->getName() . '<br/>';
+            
+            $pid = $i->getProductID();
+            $pp = Mage::getModel('catalog/product')->load($pid);
+            $pas = $pp->getAttributes();
+            
+            foreach ($pas as $pa) {
+                if ($pa->getAttributeCode() == 'unit') {
+                    // $label = $attribute->getFrontend()->getLabel($product);
+                    $pu .= $pa->getFrontend()->getValue($pp);
+                    break;
+                }
+            }
+            $pu .= number_format($i->getQtyOrdered(), 0) . '<br/>';
+            $unit = $pu;
+        }
     }
+
 
     $res_row .= '<tr><td>' . $result['entity_id'] . '</td>
         <td><a href="' . Mage::helper('adminhtml')->getUrl('adminhtml/sales_order/view/order_id/', ['order_id' => $result['entity_id']]) . '">' . $result['increment_id'] . '</a></td>
-        <td>' . $result['name'] . '</td>
-        <td class="a-center">' . $unit . number_format($result['qty_ordered'], 0) . '</td>
+        <td>' . $ordered_items . '</td>
+        <td class="a-center">' . $unit . '</td>
         <td class="a-right">' . $result['base_currency_code'] . number_format($result['base_subtotal'], 2, ',', '')
             . '<br/>' . $order->getPayment()->getMethodInstance()->getTitle() . '</td>
         <td class="a-left">' . $result['shipping_description'] . '</td><td class="last">' .
 			$result['increment_id'] . '<br/>' .
-			$result['firstname'] . ' ' . $result['lastname'] . '<br/>' .
-			$result['street'] . '<br/>' .
-			$result['city'] . ', ' . $result['postcode'] . '<br/>' .
-			Mage::app()->getLocale()->getTranslation($result['country_id'], 'Territory', null, 2) . '<br/>' .
-			'Telephone: ' . $result['telephone'] . '<br/>' .
-			'Email: <a href="mailto:' . $result['email'] . '">' . $result['email'] . '</a><br/>' .
-			number_format($result['qty_ordered'], 0) . 'x ' . $result['name']
-		. '</td></tr>';
+            $order->getShippingAddress()->getFormated(true) . '<br/>' .
+			// Mage::app()->getLocale()->getTranslation($result['country_id'], 'Territory', null, 2) .
+			'Email: <a href="mailto:' . $order->getCustomerEmail() . '">' . $order->getCustomerEmail() . '</a><br/>' .
+			$ordered_items_units . '</td></tr>';
 }
 ?>
 <div class="grid np">
